@@ -363,11 +363,22 @@ function Index() {
         </div>
       </section>
 
+      <section className="final-cta theroverse-cta">
+        <div className="shell final-inner">
+          <span className="section-kicker">Parte de um ecossistema maior</span>
+          <h2>Athena é uma peça do <em>Theroverse</em>.</h2>
+          <p>Thero comanda, Athena mapeia o projeto, Zeus planeja antes de qualquer mudança — conheça as outras ferramentas abertas do ecossistema.</p>
+          <div className="hero-actions">
+            <a className="button button-primary" href="https://theroverse.github.io/" target="_blank" rel="noreferrer">Explorar o Theroverse <ArrowRight size={17} /></a>
+          </div>
+        </div>
+      </section>
+
       <footer>
         <div className="shell footer-inner">
           <a href="#top" className="brand"><AthenaMark size={28} /><span>athena</span></a>
           <p>A planta baixa do seu projeto, pronta para qualquer conversa com IA.</p>
-          <div><a href="https://theroverse.github.io/thero/" target="_blank" rel="noreferrer">Thero</a><a href="https://theroverse.github.io/zeus/" target="_blank" rel="noreferrer">Zeus</a><a href="https://github.com/theroverse/athena/blob/main/LICENSE" target="_blank" rel="noreferrer">MIT License</a></div>
+          <div><a href="https://theroverse.github.io/" target="_blank" rel="noreferrer">Theroverse</a><a href="https://theroverse.github.io/thero/" target="_blank" rel="noreferrer">Thero</a><a href="https://theroverse.github.io/zeus/" target="_blank" rel="noreferrer">Zeus</a><a href="https://github.com/theroverse/athena/blob/main/LICENSE" target="_blank" rel="noreferrer">MIT License</a></div>
           <small>© 2026 Anthero Vieira Neto</small>
         </div>
       </footer>
