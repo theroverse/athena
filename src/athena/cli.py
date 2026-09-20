@@ -41,8 +41,8 @@ COMO FUNCIONA
     ("claude -p"), de baixo para cima: primeiro cada arquivo, depois
     cada pasta (a partir dos resumos dos seus arquivos/subpastas),
     ate chegar num resumo da raiz do projeto. Cada resumo fica em
-    .athena/tree/<caminho>.md (arquivos) ou
-    .athena/tree/<caminho>/_dir_summary.md (pastas), espelhando a
+    .athena/tree/<caminho>.atn.md (arquivos) ou
+    .athena/tree/<caminho>/_dir_summary.atn.md (pastas), espelhando a
     estrutura do projeto. Um cache (.athena/manifest.json) guarda o
     hash de cada item ja resumido, entao rodar de novo so re-resume o
     que mudou.
@@ -274,8 +274,8 @@ def run_show(args: argparse.Namespace) -> None:
     if target in (".", ""):
         summary_path = output_dir / ROOT_SUMMARY_FILENAME
     else:
-        dir_summary_path = tree_dir / target / "_dir_summary.md"
-        file_summary_path = tree_dir / f"{target}.md"
+        dir_summary_path = tree_dir / target / f"_dir_summary{SUMMARY_EXTENSION}"
+        file_summary_path = tree_dir / f"{target}{SUMMARY_EXTENSION}"
 
         if dir_summary_path.exists():
             summary_path = dir_summary_path

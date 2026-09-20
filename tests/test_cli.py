@@ -174,7 +174,7 @@ def test_run_index_success_writes_root_summary_and_saves_manifest(tmp_path):
         run_index(args)
 
     output_dir = tmp_path / ".athena"
-    assert (output_dir / "summary.md").read_text(encoding="utf-8") == "root summary\n"
+    assert (output_dir / "summary.atn.md").read_text(encoding="utf-8") == "root summary\n"
     assert (output_dir / "manifest.json").exists()
 
 
@@ -183,13 +183,13 @@ def test_run_index_removes_orphaned_summaries(tmp_path):
     output_dir = tmp_path / ".athena"
     tree_dir = output_dir / "tree"
     tree_dir.mkdir(parents=True)
-    orphan_summary = tree_dir / "removed.py.md"
+    orphan_summary = tree_dir / "removed.py.atn.md"
     orphan_summary.write_text("stale", encoding="utf-8")
 
     manifest_path = output_dir / "manifest.json"
     manifest_path.write_text(
         '{"version": 1, "entries": {"removed.py": '
-        '{"hash": "x", "summary_path": "removed.py.md", "type": "file"}}}',
+        '{"hash": "x", "summary_path": "removed.py.atn.md", "type": "file"}}}',
         encoding="utf-8",
     )
 
@@ -251,7 +251,7 @@ def test_run_index_no_gitignore_tip_when_already_present(tmp_path, capsys):
 def test_run_show_root_summary(tmp_path):
     output_dir = tmp_path / ".athena"
     output_dir.mkdir()
-    (output_dir / "summary.md").write_text("root content", encoding="utf-8")
+    (output_dir / "summary.atn.md").write_text("root content", encoding="utf-8")
     args = MagicMock(target=".", path=str(tmp_path))
 
     run_show(args)
@@ -260,7 +260,7 @@ def test_run_show_root_summary(tmp_path):
 def test_run_show_root_summary_prints_content(tmp_path, capsys):
     output_dir = tmp_path / ".athena"
     output_dir.mkdir()
-    (output_dir / "summary.md").write_text("root content", encoding="utf-8")
+    (output_dir / "summary.atn.md").write_text("root content", encoding="utf-8")
     args = MagicMock(target=".", path=str(tmp_path))
 
     run_show(args)
@@ -272,8 +272,8 @@ def test_run_show_root_summary_prints_content(tmp_path, capsys):
 def test_run_show_file_summary(tmp_path, capsys):
     tree_dir = tmp_path / ".athena" / "tree"
     tree_dir.mkdir(parents=True)
-    (tree_dir / "src" / "a.py.md").parent.mkdir(parents=True)
-    (tree_dir / "src" / "a.py.md").write_text("file summary", encoding="utf-8")
+    (tree_dir / "src" / "a.py.atn.md").parent.mkdir(parents=True)
+    (tree_dir / "src" / "a.py.atn.md").write_text("file summary", encoding="utf-8")
     args = MagicMock(target="src/a.py", path=str(tmp_path))
 
     run_show(args)
@@ -286,7 +286,7 @@ def test_run_show_dir_summary(tmp_path, capsys):
     tree_dir = tmp_path / ".athena" / "tree"
     sub_dir = tree_dir / "src"
     sub_dir.mkdir(parents=True)
-    (sub_dir / "_dir_summary.md").write_text("dir summary", encoding="utf-8")
+    (sub_dir / "_dir_summary.atn.md").write_text("dir summary", encoding="utf-8")
     args = MagicMock(target="src", path=str(tmp_path))
 
     run_show(args)
@@ -308,7 +308,7 @@ def test_run_show_strips_leading_trailing_slashes(tmp_path, capsys):
     tree_dir = tmp_path / ".athena" / "tree"
     sub_dir = tree_dir / "src"
     sub_dir.mkdir(parents=True)
-    (sub_dir / "_dir_summary.md").write_text("dir summary", encoding="utf-8")
+    (sub_dir / "_dir_summary.atn.md").write_text("dir summary", encoding="utf-8")
     args = MagicMock(target="/src/", path=str(tmp_path))
 
     run_show(args)

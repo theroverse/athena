@@ -138,9 +138,9 @@ def test_summarize_file_cache_hit_skips_claude(tmp_path):
     content_hash = hash_text("print(1)")
 
     manifest = Manifest(tmp_path / "manifest.json")
-    manifest.mark("a.py", content_hash, "a.py.md", "file")
-    (tree_dir / "a.py.md").parent.mkdir(parents=True, exist_ok=True)
-    (tree_dir / "a.py.md").write_text("cached summary", encoding="utf-8")
+    manifest.mark("a.py", content_hash, "a.py.atn.md", "file")
+    (tree_dir / "a.py.atn.md").parent.mkdir(parents=True, exist_ok=True)
+    (tree_dir / "a.py.atn.md").write_text("cached summary", encoding="utf-8")
 
     stats = IndexStats()
     with patch("athena.summarizer.indexer.call_claude") as mock_claude:
@@ -159,9 +159,9 @@ def test_summarize_file_force_ignores_cache(tmp_path):
     content_hash = hash_text("print(1)")
 
     manifest = Manifest(tmp_path / "manifest.json")
-    manifest.mark("a.py", content_hash, "a.py.md", "file")
-    (tree_dir / "a.py.md").parent.mkdir(parents=True, exist_ok=True)
-    (tree_dir / "a.py.md").write_text("cached summary", encoding="utf-8")
+    manifest.mark("a.py", content_hash, "a.py.atn.md", "file")
+    (tree_dir / "a.py.atn.md").parent.mkdir(parents=True, exist_ok=True)
+    (tree_dir / "a.py.atn.md").write_text("cached summary", encoding="utf-8")
 
     stats = IndexStats()
     with patch(
@@ -189,7 +189,7 @@ def test_summarize_file_dry_run_does_not_call_claude_or_write(tmp_path):
 
     assert result is not None
     mock_claude.assert_not_called()
-    assert not (tree_dir / "a.py.md").exists()
+    assert not (tree_dir / "a.py.atn.md").exists()
     assert stats.files_summarized == 1
 
 
@@ -243,7 +243,7 @@ def test_summarize_file_success_writes_summary_and_marks_manifest(tmp_path):
         )
 
     assert result == "  the summary  "
-    assert (tree_dir / "a.py.md").read_text(encoding="utf-8") == "the summary\n"
+    assert (tree_dir / "a.py.atn.md").read_text(encoding="utf-8") == "the summary\n"
     assert manifest.get_hash("a.py") == hash_text("print(1)")
     assert stats.files_summarized == 1
 
