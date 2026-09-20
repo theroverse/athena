@@ -259,7 +259,7 @@ function Index() {
         │   └── components/
         │       ├── _dir_summary.md
         │       └── Button.tsx.md
-        └── _dir_summary.md</pre>
+        └── _dir_summary.md`}</pre>
             <div className="system-caption"><Eye size={14} /><span>arquivos primeiro</span><ArrowRight size={12} /><span>pastas a partir dos filhos</span><ArrowRight size={12} /><span>planta baixa do projeto</span></div>
           </div>
         </div>
