@@ -7,7 +7,7 @@ from pathlib import Path
 from athena.hashing import hash_text
 from athena.ignore import IgnoreMatcher
 from athena.manifest import Manifest
-from athena.settings import MAX_FILE_CHARS
+from athena.settings import MAX_FILE_CHARS, SUMMARY_EXTENSION
 from athena.summarizer.claude_client import call_claude
 from athena.summarizer.prompts import FILE_SUMMARY_PROMPT, FOLDER_SUMMARY_PROMPT
 
@@ -99,15 +99,15 @@ def _read_text_or_none(path: Path) -> str | None:
 
 
 def _summary_path_for_file(relative_path: str) -> str:
-    return f"{relative_path}.md"
+    return f"{relative_path}{SUMMARY_EXTENSION}"
 
 
 def _summary_path_for_dir(relative_path: str) -> str:
 
     if relative_path == ".":
-        return "_dir_summary.md"
+        return f"_dir_summary{SUMMARY_EXTENSION}"
 
-    return f"{relative_path}/_dir_summary.md"
+    return f"{relative_path}/_dir_summary{SUMMARY_EXTENSION}"
 
 
 def summarize_file(

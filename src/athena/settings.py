@@ -4,7 +4,12 @@ MANIFEST_FILENAME = "manifest.json"
 
 TREE_DIRNAME = "tree"
 
-ROOT_SUMMARY_FILENAME = "summary.md"
+# Extensao dos arquivos de resumo gerados pela Athena. Dedicada (em vez de
+# ".md" puro) pra nao se confundir com documentacao real do projeto e pra
+# dar um padrao de glob inequivoco (*.atn.md) pra quem consome o indice.
+SUMMARY_EXTENSION = ".atn.md"
+
+ROOT_SUMMARY_FILENAME = f"summary{SUMMARY_EXTENSION}"
 
 ATHENAIGNORE_FILENAME = ".athenaignore"
 

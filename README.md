@@ -34,9 +34,9 @@ não mapeados.
   disco.
 - **Cache incremental de verdade.** Rodar de novo só re-resume o que
   mudou — não reprocessa o projeto inteiro a cada execução.
-- **Parte de uma suíte**: o [thero](https://github.com/netovieira/thero)
+- **Parte de uma suíte**: o [thero](https://github.com/theroverse/thero)
   configura o Claude Code pra já consultar os resumos da Athena
-  automaticamente, e o [Zeus](https://github.com/netovieira/zeus) usa
+  automaticamente, e o [Zeus](https://github.com/theroverse/zeus) usa
   esses resumos pra planejar uma tarefa antes de você pedir pro Claude
   executar. Cada um funciona sozinho também.
 
@@ -68,7 +68,7 @@ não mapeados.
 ## Instalação
 
 ```
-git clone https://github.com/netovieira/athena.git
+git clone https://github.com/theroverse/athena.git
 cd athena
 python athena.py --help
 ```
@@ -146,12 +146,12 @@ Cada arquivo ou pasta novo/alterado gera uma chamada real ao
 
 ## Integração com o Thero
 
-O [`thero`](https://github.com/netovieira/thero) (setup do Claude
+O [`thero`](https://github.com/theroverse/thero) (setup do Claude
 Code) pode rodar `athena index .` automaticamente como um passo
 opcional (`thero --index`), se a Athena estiver instalada. Veja o
 README do `thero` para detalhes.
 
-Existe um segundo par desta ferramenta, o [`zeus`](https://github.com/netovieira/zeus):
+Existe um segundo par desta ferramenta, o [`zeus`](https://github.com/theroverse/zeus):
 um planejador que cruza o pedido do usuário com o índice gerado pela
 Athena (via `claude -p`) para decidir quais arquivos reais precisam
 ser lidos/editados antes de uma tarefa, escrevendo o resultado em

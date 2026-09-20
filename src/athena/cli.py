@@ -11,6 +11,7 @@ from athena.settings import (
     DEFAULT_MAX_FILES,
     OUTPUT_DIRNAME,
     ROOT_SUMMARY_FILENAME,
+    SUMMARY_EXTENSION,
     TREE_DIRNAME,
 )
 from athena.summarizer.indexer import (
