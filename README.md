@@ -63,7 +63,15 @@ não mapeados.
 ## Requisitos
 
 - Python 3.10+ (só biblioteca padrão, sem dependências externas)
-- Claude Code instalado e autenticado (`claude -p`)
+- Claude Code instalado e autenticado (`claude -p`) — **ou** [Ollama](
+  https://ollama.com) local para rodar o resumo 100% offline
+  (com `--backend local`/`auto`).
+
+> **Soberania local:** com o Ollama de pé, a Athena não faz nenhuma
+> chamada externa — os resumos e a busca de memória rodam na sua
+> máquina. O `--backend auto` (padrão) usa Ollama se ele estiver
+> acessível e cai para o Claude Code caso contrário, então nada quebra
+> para quem ainda não instalou o Ollama.
 
 ## Instalação
 
@@ -78,6 +86,8 @@ python athena.py --help
 ```
 python athena.py index [PASTA]     # gera/atualiza o índice
 python athena.py show <caminho>    # mostra um resumo já indexado
+python athena.py remember <kind> <arquivo>  # grava uma decisão/convenção na memória
+python athena.py recall <consulta> # busca por similaridade na memória
 python athena.py --help
 ```
 
@@ -98,6 +108,44 @@ python athena.py show src/components/Button.tsx   # resumo de um arquivo
 python athena.py show src/components               # resumo de uma pasta
 python athena.py show .                             # resumo raiz do projeto
 ```
+
+### Backend: `--backend {auto,local,claude}`
+
+Escolhe **onde** a chamada de resumo roda:
+
+- `local` → **Ollama** (`http://localhost:11434`), offline e barato;
+  arquivos independentes são resumidos em paralelo via HTTP.
+- `claude` → CLI `claude -p` (comportamento histórico).
+- `auto` (padrão) → Ollama se estiver de pé, senão Claude.
+
+```
+python athena.py index --backend local --model llama3.2
+python athena.py index --backend local            # usa ATHENA_OLLAMA_MODEL
+```
+
+Host e modelo têm default (localhost / `llama3.2`) e são sobrescritos
+por ambiente: `ATHENA_OLLAMA_HOST`, `ATHENA_OLLAMA_MODEL`. Aliases do
+Claude (`haiku`/`sonnet`/`opus`) são ignorados no backend local — ali
+vale o nome do modelo do Ollama.
+
+### Memória local: `remember` / `recall`
+
+Um banco vetorial leve em `.thero/memory/index.sqlite3` (stdlib
+`sqlite3`) guarda convenções, histórico e decisões arquiteturais para
+rechamar contexto sem recomprimir tudo do zero.
+
+```
+python athena.py remember decision docs/adr-001-cache.md
+python athena.py remember convention docs/styleguide.md
+python athena.py recall "como funciona o cache incremental"
+python athena.py recall "rate limit" --k 3
+```
+
+`remember` faz dedupe por hash do conteúdo (registrar de novo não
+duplica). `recall` ordena por similaridade: **cosseno** sobre embeddings
+do Ollama quando ele está de pé, senão **TF-IDF puro** como fallback
+offline — nos dois casos a busca é determinística e local. `kind` aceita
+`convention`, `history`, `decision`, `note`.
 
 ## Como funciona
 
@@ -161,7 +209,9 @@ ser lidos/editados antes de uma tarefa, escrevendo o resultado em
 
 - Só lê o `.gitignore` da raiz do projeto — não considera `.gitignore`
   aninhados em subpastas.
-- Processamento é sequencial (um resumo por vez), não paralelo.
+- A busca de memória por cosseno só fica semântica de fato com o Ollama
+  de pé; offline, o fallback TF-IDF é léxico (palavra-chave), não
+  semântico.
 - Não tenta detectar se o `claude` autenticado tem cota/rate limit
   suficiente para o volume de arquivos — use `--dry-run` e
   `--max-files` para se proteger de rodadas grandes demais.
@@ -172,17 +222,22 @@ ser lidos/editados antes de uma tarefa, escrevendo o resultado em
 athena/
 ├── athena.py                 # ponto de entrada (python athena.py ...)
 ├── src/athena/
-│   ├── cli.py                  # argparse + orquestração (index/show)
-│   ├── settings.py             # nomes de arquivo/pasta, limites
+│   ├── cli.py                  # argparse + orquestração (index/show/remember/recall)
+│   ├── settings.py             # nomes de arquivo/pasta, limites, backend, memória
 │   ├── ignore.py                # matcher estilo .gitignore
-│   ├── hashing.py                 # hash de conteúdo (cache)
+│   ├── hashing.py                 # hash de conteúdo (cache + dedupe da memória)
 │   ├── manifest.py                 # cache incremental (.athena/manifest.json)
+│   ├── memory/
+│   │   └── store.py                   # banco vetorial leve (sqlite3 + cosseno/TF-IDF)
 │   ├── summarizer/
-│   │   ├── prompts.py                # prompts de resumo (arquivo/pasta)
+│   │   ├── prompts.py                # prompts de resumo (arquivo/pasta/logs)
+│   │   ├── backend.py                 # roteia local(Ollama) <-> claude(CLI)
+│   │   ├── ollama_client.py           # cliente HTTP stdlib ao Ollama (paralelo)
 │   │   ├── claude_client.py           # chamada ao "claude -p" (via stdin)
-│   │   └── indexer.py                  # varredura + orquestração bottom-up
+│   │   ├── context.py                  # API de resumo limpo (code/logs, sem ruído)
+│   │   └── indexer.py                   # varredura + orquestração bottom-up
 │   └── system/
-│       └── process.py                   # execução de comandos (Windows/POSIX)
+│       └── process.py                     # execução de comandos (Windows/POSIX)
 ├── README.md
 └── .gitignore
 ```
