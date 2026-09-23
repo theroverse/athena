@@ -1,0 +1,74 @@
+name: deploy-landing
+
+# Builds the static landing page (TanStack Start SSG) and publishes it to
+# GitHub Pages for this repository: https://theroverse.github.io/athena/
+on:
+  push:
+    branches: [main]
+    paths:
+      - "landing/**"
+      - ".github/workflows/deploy-pages.yml"
+  pull_request:
+    paths:
+      - "landing/**"
+      - ".github/workflows/deploy-pages.yml"
+  workflow_dispatch:
+
+# Required by actions/deploy-pages (id-token) and actions/configure-pages (pages).
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Serialize per-ref so a PR build never races the master deploy artifact.
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: landing
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: landing/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build static site (SSG)
+        # Emits a fully prerendered, self-contained site to landing/dist/client
+        # with asset URLs already rewritten for the /athena/ sub-path.
+        run: pnpm build
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: landing/dist/client
+
+  deploy:
+    # Only publish to Pages from the main branch (never from forks/PRs).
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

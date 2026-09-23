@@ -52,3 +52,29 @@ def test_call_claude_returns_stripped_stdout_on_success():
     mock_run.assert_called_once_with(
         ["claude", "-p"], capture=True, cwd="/proj", input_text="my prompt"
     )
+
+
+def test_call_claude_omits_model_flag_by_default():
+    fake_result = MagicMock(returncode=0, stdout="hi", stderr="")
+    with patch(
+        "athena.summarizer.claude_client.command_exists", return_value=True
+    ), patch(
+        "athena.summarizer.claude_client.run_command", return_value=fake_result
+    ) as mock_run:
+        call_claude("my prompt")
+
+    called_command = mock_run.call_args.args[0]
+    assert called_command == ["claude", "-p"]
+
+
+def test_call_claude_forwards_model_flag():
+    fake_result = MagicMock(returncode=0, stdout="hi", stderr="")
+    with patch(
+        "athena.summarizer.claude_client.command_exists", return_value=True
+    ), patch(
+        "athena.summarizer.claude_client.run_command", return_value=fake_result
+    ) as mock_run:
+        call_claude("my prompt", model="haiku")
+
+    called_command = mock_run.call_args.args[0]
+    assert called_command == ["claude", "-p", "--model", "haiku"]
