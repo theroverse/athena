@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
-from athena.system.process import command_exists, run_command
+from athena.system.process import command_exists, hide_windows_path, run_command
 
 
 def test_command_exists_true_when_which_finds_it():
@@ -22,19 +23,21 @@ def test_run_command_raises_on_empty_command():
         run_command([])
 
 
+@patch("athena.system.process.shutil.which", return_value=r"C:\tools\claude.cmd")
 @patch("athena.system.process.os.name", "nt")
 @patch("athena.system.process.subprocess.run")
-def test_run_command_maps_claude_launcher_on_windows(mock_run):
+def test_run_command_maps_claude_launcher_on_windows(mock_run, _mock_which):
     run_command(["claude", "-p"])
 
     called_command = mock_run.call_args.args[0]
-    assert called_command[0] == "claude.cmd"
+    assert called_command[0] == r"C:\tools\claude.cmd"
     assert called_command[1:] == ["-p"]
 
 
+@patch("athena.system.process.shutil.which", return_value=None)
 @patch("athena.system.process.os.name", "nt")
 @patch("athena.system.process.subprocess.run")
-def test_run_command_leaves_unknown_executable_unmapped_on_windows(mock_run):
+def test_run_command_leaves_unknown_executable_unmapped_on_windows(mock_run, _mock_which):
     run_command(["python", "-V"])
 
     called_command = mock_run.call_args.args[0]
@@ -80,3 +83,26 @@ def test_run_command_cwd_none_when_not_given(mock_run):
     run_command(["cmd"])
 
     assert mock_run.call_args.kwargs["cwd"] is None
+
+
+@patch("athena.system.process.os.name", "posix")
+def test_hide_windows_path_is_noop_on_posix():
+    assert hide_windows_path(Path("/some/dir")) is False
+
+
+@patch("athena.system.process.os.name", "nt")
+@patch("ctypes.windll.kernel32.SetFileAttributesW", create=True)
+def test_hide_windows_path_sets_hidden_attribute_on_windows(mock_set_attrs):
+    mock_set_attrs.return_value = 1
+
+    assert hide_windows_path(Path("C:/some/.athena")) is True
+
+    mock_set_attrs.assert_called_once_with("C:\\some\\.athena", 0x2)
+
+
+@patch("athena.system.process.os.name", "nt")
+@patch("ctypes.windll.kernel32.SetFileAttributesW", create=True)
+def test_hide_windows_path_returns_false_when_winapi_call_fails(mock_set_attrs):
+    mock_set_attrs.return_value = 0
+
+    assert hide_windows_path(Path("C:/some/.athena")) is False

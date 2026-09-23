@@ -103,6 +103,19 @@ def test_always_ignored_cannot_be_negated_by_user_rule():
     assert matcher.is_ignored(".git", True) is True
 
 
+def test_match_rules_returns_none_when_nothing_matches():
+    matcher = make_matcher("*.log")
+
+    assert matcher.match_rules("app.py", False) is None
+
+
+def test_match_rules_returns_bool_when_a_rule_matches():
+    matcher = make_matcher("*.log", "!keep.log")
+
+    assert matcher.match_rules("app.log", False) is True
+    assert matcher.match_rules("keep.log", False) is False
+
+
 def test_build_matcher_reads_gitignore_from_project_root(tmp_path):
     (tmp_path / ".gitignore").write_text("*.log\n", encoding="utf-8")
 

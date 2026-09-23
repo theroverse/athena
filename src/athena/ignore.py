@@ -118,6 +118,31 @@ class IgnoreMatcher:
         for raw_line in text.splitlines():
             self.add_line(raw_line)
 
+    def match_rules(
+        self,
+        relative_posix_path: str,
+        is_dir: bool,
+    ) -> bool | None:
+        """
+        Igual a `is_ignored`, mas sem o atalho de ALWAYS_IGNORED_NAMES e
+        distinguindo "nenhuma regra bateu" (None) de "regra bateu e
+        desmarcou" (False). Usado para combinar varios .gitignore
+        aninhados, onde regras de niveis mais profundos so devem
+        sobrepor as de niveis acima quando realmente baterem.
+        """
+
+        result: bool | None = None
+
+        for regex, dir_only, negate in self._rules:
+
+            if dir_only and not is_dir:
+                continue
+
+            if regex.match(relative_posix_path):
+                result = not negate
+
+        return result
+
     def is_ignored(
         self,
         relative_posix_path: str,
@@ -129,17 +154,7 @@ class IgnoreMatcher:
         if name in ALWAYS_IGNORED_NAMES:
             return True
 
-        ignored = False
-
-        for regex, dir_only, negate in self._rules:
-
-            if dir_only and not is_dir:
-                continue
-
-            if regex.match(relative_posix_path):
-                ignored = not negate
-
-        return ignored
+        return bool(self.match_rules(relative_posix_path, is_dir))
 
 
 def build_matcher(
