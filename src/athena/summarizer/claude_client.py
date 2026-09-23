@@ -9,6 +9,7 @@ def call_claude(
     prompt: str,
     *,
     cwd: Path | None = None,
+    model: str | None = None,
 ) -> str | None:
 
     if not command_exists("claude"):
@@ -17,11 +18,13 @@ def call_claude(
         )
         return None
 
+    command = ["claude", "-p"]
+
+    if model is not None:
+        command += ["--model", model]
+
     result = run_command(
-        [
-            "claude",
-            "-p",
-        ],
+        command,
         capture=True,
         cwd=cwd,
         input_text=prompt,

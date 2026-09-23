@@ -1,15 +1,25 @@
 from __future__ import annotations
 
 import os
+import threading
+from collections.abc import Iterator
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from athena.hashing import hash_text
 from athena.ignore import IgnoreMatcher
 from athena.manifest import Manifest
-from athena.settings import MAX_FILE_CHARS, SUMMARY_EXTENSION
-from athena.summarizer.claude_client import call_claude
+from athena.settings import (
+    ALWAYS_IGNORED_NAMES,
+    DEFAULT_BACKEND,
+    MAX_FILE_CHARS,
+    SUMMARY_EXTENSION,
+)
+from athena.summarizer import backend as backend_router
 from athena.summarizer.prompts import FILE_SUMMARY_PROMPT, FOLDER_SUMMARY_PROMPT
+
+_stats_lock = threading.Lock()
 
 
 @dataclass
@@ -43,11 +53,51 @@ def _relative_posix(path: Path, root: Path) -> str:
     return text if text else "."
 
 
+def _is_ignored_by_layers(
+    entry_path: Path,
+    layers: list[tuple[Path, IgnoreMatcher]],
+    is_dir: bool,
+) -> bool:
+
+    if entry_path.name in ALWAYS_IGNORED_NAMES:
+        return True
+
+    ignored = False
+
+    for base, layer_matcher in layers:
+        rel = _relative_posix(entry_path, base)
+        verdict = layer_matcher.match_rules(rel, is_dir)
+        if verdict is not None:
+            ignored = verdict
+
+    return ignored
+
+
 def build_tree(
     directory: Path,
     root: Path,
     matcher: IgnoreMatcher,
+    _layers: list[tuple[Path, IgnoreMatcher]] | None = None,
 ) -> DirNode:
+    """
+    A pasta raiz ja carrega seu proprio .gitignore/.athenaignore via
+    `matcher` (ver `build_matcher`). Cada subpasta que tambem tenha um
+    .gitignore proprio empilha uma camada extra, igual ao git real:
+    regras de niveis mais profundos so sobrepoem as de niveis acima
+    quando realmente casam com o caminho (ver `_is_ignored_by_layers`).
+    Isso evita ter que listar manualmente node_modules/dist/etc de cada
+    submodulo num .gitignore/.athenaignore central na raiz.
+    """
+
+    if _layers is None:
+        _layers = [(root, matcher)]
+
+    own_gitignore = directory / ".gitignore"
+
+    if directory != root and own_gitignore.is_file():
+        nested_matcher = IgnoreMatcher()
+        nested_matcher.load_file(own_gitignore)
+        _layers = [*_layers, (directory, nested_matcher)]
 
     entries = sorted(
         os.scandir(directory),
@@ -63,16 +113,16 @@ def build_tree(
 
         entry_path = Path(entry.path)
         is_dir = entry.is_dir(follow_symlinks=False)
-        rel = _relative_posix(entry_path, root)
 
-        if matcher.is_ignored(rel, is_dir):
+        if _is_ignored_by_layers(entry_path, _layers, is_dir):
             continue
 
         if is_dir:
             node.subdirs.append(
-                build_tree(entry_path, root, matcher)
+                build_tree(entry_path, root, matcher, _layers)
             )
         else:
+            rel = _relative_posix(entry_path, root)
             node.files.append(
                 FileNode(relative_path=rel, absolute_path=entry_path)
             )
@@ -118,12 +168,24 @@ def summarize_file(
     force: bool,
     dry_run: bool,
     stats: IndexStats,
+    model: str | None = None,
+    backend: str = DEFAULT_BACKEND,
 ) -> str | None:
+    """
+    Pode ser chamada em paralelo (uma thread por arquivo, ver
+    `summarize_files_parallel`) porque cada chamada le/escreve um
+    `summary_abs_path` proprio (sem colisao entre arquivos) e a unica
+    chamada real e a `call_claude`, que e I/O (subprocess), nao CPU —
+    varias em paralelo aceleram o indexador sem competir por GIL.
+    Mutacoes de `manifest`/`stats` (estado compartilhado entre
+    threads) ficam atras de `_stats_lock`.
+    """
 
     content = _read_text_or_none(file_node.absolute_path)
 
     if content is None:
-        stats.files_skipped_binary += 1
+        with _stats_lock:
+            stats.files_skipped_binary += 1
         return None
 
     if len(content) > MAX_FILE_CHARS:
@@ -143,20 +205,22 @@ def summarize_file(
         and cached_hash == content_hash
         and summary_abs_path.exists()
     ):
-        stats.files_skipped_cache += 1
-        manifest.mark(
-            file_node.relative_path,
-            content_hash,
-            summary_rel_path,
-            "file",
-        )
+        with _stats_lock:
+            stats.files_skipped_cache += 1
+            manifest.mark(
+                file_node.relative_path,
+                content_hash,
+                summary_rel_path,
+                "file",
+            )
         return summary_abs_path.read_text(
             encoding="utf-8",
             errors="replace",
         )
 
     if dry_run:
-        stats.files_summarized += 1
+        with _stats_lock:
+            stats.files_summarized += 1
         print(f"[DRY-RUN] Resumiria arquivo: {file_node.relative_path}")
         return "[dry-run] resumo seria gerado aqui"
 
@@ -165,10 +229,11 @@ def summarize_file(
         content=content,
     )
 
-    summary = call_claude(prompt)
+    summary = backend_router.summarize(prompt, backend=backend, model=model)
 
     if summary is None:
-        stats.errors += 1
+        with _stats_lock:
+            stats.errors += 1
         print(
             f"[WARN] Falha ao resumir: {file_node.relative_path}"
         )
@@ -180,18 +245,94 @@ def summarize_file(
         encoding="utf-8",
     )
 
-    manifest.mark(
-        file_node.relative_path,
-        content_hash,
-        summary_rel_path,
-        "file",
-    )
-
-    stats.files_summarized += 1
+    with _stats_lock:
+        manifest.mark(
+            file_node.relative_path,
+            content_hash,
+            summary_rel_path,
+            "file",
+        )
+        stats.files_summarized += 1
 
     print(f"[OK] Resumido: {file_node.relative_path}")
 
     return summary
+
+
+def iter_files(dir_node: DirNode) -> Iterator[FileNode]:
+
+    yield from dir_node.files
+
+    for subdir in dir_node.subdirs:
+        yield from iter_files(subdir)
+
+
+def summarize_files_parallel(
+    dir_node: DirNode,
+    manifest: Manifest,
+    tree_dir: Path,
+    *,
+    force: bool,
+    dry_run: bool,
+    stats: IndexStats,
+    max_workers: int,
+    model: str | None = None,
+    backend: str = DEFAULT_BACKEND,
+) -> dict[str, str]:
+    """
+    Resume todos os arquivos da arvore em paralelo (thread pool), antes
+    do passo bottom-up de `summarize_dir`. Arquivos nao dependem uns
+    dos outros (so pastas dependem dos resumos dos filhos), e e ai que
+    o indexador gasta a maior parte do tempo — uma chamada real ao
+    Claude (subprocess, I/O-bound) por arquivo nao cacheado.
+    """
+
+    file_nodes = list(iter_files(dir_node))
+    results: dict[str, str] = {}
+
+    if not file_nodes:
+        return results
+
+    if max_workers <= 1:
+        for file_node in file_nodes:
+            summary = summarize_file(
+                file_node,
+                manifest,
+                tree_dir,
+                force=force,
+                dry_run=dry_run,
+                stats=stats,
+                model=model,
+                backend=backend,
+            )
+            if summary is not None:
+                results[file_node.relative_path] = summary
+        return results
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+
+        future_to_node = {
+            executor.submit(
+                summarize_file,
+                file_node,
+                manifest,
+                tree_dir,
+                force=force,
+                dry_run=dry_run,
+                stats=stats,
+                model=model,
+                backend=backend,
+            ): file_node
+            for file_node in file_nodes
+        }
+
+        for future in as_completed(future_to_node):
+            file_node = future_to_node[future]
+            summary = future.result()
+            if summary is not None:
+                results[file_node.relative_path] = summary
+
+    return results
 
 
 def summarize_dir(
@@ -202,7 +343,19 @@ def summarize_dir(
     force: bool,
     dry_run: bool,
     stats: IndexStats,
+    file_summaries: dict[str, str] | None = None,
+    model: str | None = None,
+    backend: str = DEFAULT_BACKEND,
 ) -> str | None:
+    """
+    `file_summaries` (opcional): resumos de arquivo ja calculados (ver
+    `summarize_files_parallel`), consultados por caminho em vez de
+    chamar `summarize_file` de novo aqui. Sem isso (None), resume cada
+    arquivo diretamente e sequencialmente — mesmo comportamento de
+    antes desta funcao existir, usado quando chamar `summarize_dir`
+    isoladamente (ex.: testes, ou uma arvore pequena que nao compensa
+    paralelizar).
+    """
 
     children_summaries: list[tuple[str, str]] = []
 
@@ -215,6 +368,9 @@ def summarize_dir(
             force=force,
             dry_run=dry_run,
             stats=stats,
+            file_summaries=file_summaries,
+            model=model,
+            backend=backend,
         )
 
         if summary is not None:
@@ -224,14 +380,19 @@ def summarize_dir(
 
     for file_node in dir_node.files:
 
-        summary = summarize_file(
-            file_node,
-            manifest,
-            tree_dir,
-            force=force,
-            dry_run=dry_run,
-            stats=stats,
-        )
+        if file_summaries is not None:
+            summary = file_summaries.get(file_node.relative_path)
+        else:
+            summary = summarize_file(
+                file_node,
+                manifest,
+                tree_dir,
+                force=force,
+                dry_run=dry_run,
+                stats=stats,
+                model=model,
+                backend=backend,
+            )
 
         if summary is not None:
             children_summaries.append(
@@ -281,7 +442,7 @@ def summarize_dir(
         children=children_block,
     )
 
-    summary = call_claude(prompt)
+    summary = backend_router.summarize(prompt, backend=backend, model=model)
 
     if summary is None:
         stats.errors += 1
